@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"fmt"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,31 +10,24 @@ type Files struct {
 	Forbidden []string `yaml:"forbidden"`
 }
 
+type FileRule struct {
+	MaxSize string `yaml:"max_size"`
+}
+
 type File struct {
 	Name string
 	Rule *FileRule
 }
 
-type FileRule struct {
-	MaxSize string `yaml:"max_size"`
+func (f *File) Set(name string, rule any) {
+	f.Name = name
+	if r, ok := rule.(*FileRule); ok {
+		f.Rule = r
+	} else {
+		f.Rule = nil
+	}
 }
 
-func (nf *File) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		nf.Name = value.Value
-		nf.Rule = nil
-		return nil
-	}
-
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("invalid file node")
-	}
-
-	nf.Name = value.Content[0].Value
-	var rule FileRule
-	if err := value.Content[1].Decode(&rule); err != nil {
-		return err
-	}
-	nf.Rule = &rule
-	return nil
+func (f *File) UnmarshalYAML(value *yaml.Node) error {
+	return unmarshalNamedRule(value, f, &FileRule{})
 }

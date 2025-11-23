@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"fmt"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,34 +10,25 @@ type Folders struct {
 	Forbidden []string `yaml:"forbidden"`
 }
 
-type Folder struct {
-	Name string
-	Rule *FolderRule
-}
-
 type FolderRule struct {
 	Schema  string `yaml:"schema"`
 	MaxSize string `yaml:"max_size"`
 }
 
-func (nf *Folder) UnmarshalYAML(value *yaml.Node) error {
-	// If node is a string, just assign Name
-	if value.Kind == yaml.ScalarNode {
-		nf.Name = value.Value
-		nf.Rule = nil
-		return nil
-	}
+type Folder struct {
+	Name string
+	Rule *FolderRule
+}
 
-	// Otherwise it should be a map with one key
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("invalid folder node")
+func (f *Folder) Set(name string, rule any) {
+	f.Name = name
+	if r, ok := rule.(*FolderRule); ok {
+		f.Rule = r
+	} else {
+		f.Rule = nil
 	}
+}
 
-	nf.Name = value.Content[0].Value
-	var rule FolderRule
-	if err := value.Content[1].Decode(&rule); err != nil {
-		return err
-	}
-	nf.Rule = &rule
-	return nil
+func (f *Folder) UnmarshalYAML(value *yaml.Node) error {
+	return unmarshalNamedRule(value, f, &FolderRule{})
 }
