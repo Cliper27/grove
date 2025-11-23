@@ -7,16 +7,30 @@ import (
 	"github.com/Cliper27/grove/internal/schema"
 )
 
-func TestLoadVersion(t *testing.T) {
+func TestLoadSchemas(t *testing.T) {
 	path := filepath.Join("..", "..", "test_data", "simple.gro")
-
-	v, err := schema.LoadVersion(path)
+	schemas, err := schema.LoadSchemas(path)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("LoadSchemas error: %v", err)
 	}
 
-	expected := "0.1.0"
-	if v != expected {
-		t.Fatalf("expected version %q, got %q", expected, v)
+	if len(schemas) != 2 {
+		t.Fatalf("expected 2 schemas, got %d", len(schemas))
+	}
+
+	code := schemas["code"]
+	if code.Version != "0.1.0" {
+		t.Errorf("expected version 0.1.0, got %s", code.Version)
+	}
+	if len(code.Folders.Mandatory) != 1 {
+		t.Errorf("expected 1 mandatory folder, got %d", len(code.Folders.Mandatory))
+	}
+
+	module := schemas["module"]
+	if module.Version != "0.2.0" {
+		t.Errorf("expected version 0.2.0, got %s", module.Version)
+	}
+	if len(module.Folders.Forbidden) != 1 || module.Folders.Forbidden[0] != "*" {
+		t.Errorf("forbidden folder mismatch")
 	}
 }
