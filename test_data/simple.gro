@@ -7,24 +7,19 @@ code:
       - module:
           schema: module
           max_size: 10MB
-    optional: 
-      - lib
-    forbidden: 
-      - tmp
+    optional: [lib]
+    forbidden: [tmp]
 
   files:
-    mandatory: []
     optional: 
       - "*.py":
           max_size: 10MB
       - "*.go"
-    forbidden: 
-      - "*.exe"
+    forbidden: ["*.exe"]
 
 module:
   version: "0.2.0"
   description: "Module layout"
 
   folders:
-    forbidden:
-      - "*"
+    forbidden: ["*"]
