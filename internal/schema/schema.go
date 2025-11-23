@@ -6,21 +6,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type rawSchema struct {
-	Version string `yaml:"version"`
+type Schema struct {
+	Version     string  `yaml:"version"`
+	Description string  `yaml:"description"`
+	Folders     Folders `yaml:"folders"`
+	Files       Files   `yaml:"files"`
 }
 
-// LoadVersion reads a .gro YAML file and returns its version.
-func LoadVersion(path string) (string, error) {
+type Schemas map[string]Schema
+
+func LoadSchemas(path string) (Schemas, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var rs rawSchema
-	if err := yaml.Unmarshal(data, &rs); err != nil {
-		return "", err
+	var schemas Schemas
+	if err := yaml.Unmarshal(data, &schemas); err != nil {
+		return nil, err
 	}
 
-	return rs.Version, nil
+	return schemas, nil
 }
