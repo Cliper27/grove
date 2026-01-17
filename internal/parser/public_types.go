@@ -1,4 +1,4 @@
-package schema
+package parser
 
 var schemaCache = map[string]*Schema{}
 var schemaCacheByName = map[string]*Schema{}

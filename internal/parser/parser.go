@@ -1,18 +1,33 @@
-package schema
+package parser
 
 import (
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-var ERR_CYCLIC_INCLUDE = errors.New("cyclic include")
-var ERR_DUPLICATE_SCHEMA = errors.New("duplicate schema")
-var ERR_MISSING_INCLUDE = errors.New("missing include")
+var (
+	ERR_CYCLIC_INCLUDE    = errors.New("cyclic include")
+	ERR_DUPLICATE_SCHEMA  = errors.New("duplicate schema")
+	ERR_MISSING_INCLUDE   = errors.New("missing include")
+	ERR_INVALID_BYTEUNITS = errors.New("invalid byte units")
+
+	byteUnitsRegex = regexp.MustCompile(`^(\d+)(B|KB|MB|GB|TB)?$`)
+	mults          = map[string]uint64{
+		"":   1,
+		"B":  1,
+		"KB": 1024,
+		"MB": 1024 * 1024,
+		"GB": 1024 * 1024 * 1024,
+		"TB": 1024 * 1024 * 1024 * 1024,
+	}
+)
 
 type rawSchema struct {
 	Include []string   `yaml:"include,omitempty"`
@@ -49,10 +64,7 @@ func parsePattern(pattern string) (string, PatternEngine, NodeType) {
 	return pattern, engine, nodeType
 }
 
-func buildNodes(
-	nodes map[string]rawNode,
-	allowed map[string]*Schema,
-) ([]*Node, error) {
+func buildNodes(nodes map[string]rawNode, allowed map[string]*Schema) ([]*Node, error) {
 	if len(nodes) == 0 {
 		return nil, nil
 	}
@@ -190,4 +202,28 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	schemaCacheByName[parsed.Name] = schema
 
 	return schema, err
+}
+
+func ParseByteUnits(s string) (uint64, error) {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	if s == "" {
+		return 0, fmt.Errorf("%w: empty string (expected number + optional unit B/KB/MB/GB/TB)", ERR_INVALID_BYTEUNITS)
+	}
+
+	matches := byteUnitsRegex.FindStringSubmatch(s)
+	if matches == nil {
+		return 0, fmt.Errorf("%w: invalid format %q (expected number + optional unit B/KB/MB/GB/TB)", ERR_INVALID_BYTEUNITS, s)
+	}
+
+	value, err := strconv.ParseUint(matches[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: cannot parse number %q: %v", ERR_INVALID_BYTEUNITS, matches[1], err)
+	}
+
+	unit := matches[2]
+	mult, ok := mults[unit]
+	if !ok {
+		return 0, fmt.Errorf("%w: unknown unit %q", ERR_INVALID_BYTEUNITS, unit)
+	}
+	return value * mult, nil
 }

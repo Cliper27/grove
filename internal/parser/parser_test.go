@@ -1,4 +1,4 @@
-package schema
+package parser
 
 import (
 	"path/filepath"
@@ -99,4 +99,42 @@ func TestLoadSchema_Failure_IncludeCycle(t *testing.T) {
 	assert.Nil(t, schema)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ERR_CYCLIC_INCLUDE)
+}
+
+func TestParseByteUnits(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantBytes   uint64
+		expectError bool
+	}{
+		// Valid inputs
+		{"1B", 1, false},
+		{"1024B", 1024, false},
+		{"1KB", 1024, false},
+		{"2KB", 2048, false},
+		{"1MB", 1024 * 1024, false},
+		{"1GB", 1024 * 1024 * 1024, false},
+		{"1TB", 1024 * 1024 * 1024 * 1024, false},
+		{"10", 10, false},            // No unit defaults to bytes
+		{"  5kb  ", 5 * 1024, false}, // spaces and lowercase
+		{"0B", 0, false},
+
+		// Invalid inputs
+		{"", 0, true},      // empty
+		{"abc", 0, true},   // invalid format
+		{"123XB", 0, true}, // unknown unit
+		{"1.5MB", 0, true}, // decimal not allowed
+		{"-10B", 0, true},  // negative not allowed
+	}
+
+	for _, tt := range tests {
+		got, err := ParseByteUnits(tt.input)
+		if tt.expectError {
+			assert.Error(t, err, "input: %q", tt.input)
+			assert.Equal(t, uint64(0), got, "input: %q", tt.input)
+		} else {
+			assert.NoError(t, err, "input: %q", tt.input)
+			assert.Equal(t, tt.wantBytes, got, "input: %q", tt.input)
+		}
+	}
 }
