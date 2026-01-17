@@ -12,10 +12,32 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// schemaCache stores loaded schemas keyed by their file path.
+//
+// It is used to avoid reloading and reparsing the same schema multiple times
+// during a single execution.
+var schemaCache = map[string]*Schema{}
+
+// schemaCacheByName stores loaded schemas keyed by schema name.
+//
+// It is used to detect duplicate schema names across included schemas.
+var schemaCacheByName = map[string]*Schema{}
+
 var (
-	ERR_CYCLIC_INCLUDE    = errors.New("cyclic include")
-	ERR_DUPLICATE_SCHEMA  = errors.New("duplicate schema")
-	ERR_MISSING_INCLUDE   = errors.New("missing include")
+	// ERR_CYCLIC_INCLUDE is returned when schemas include each other
+	// directly or indirectly, forming a cycle.
+	ERR_CYCLIC_INCLUDE = errors.New("cyclic include")
+
+	// ERR_DUPLICATE_SCHEMA is returned when two schemas with the same
+	// name are loaded.
+	ERR_DUPLICATE_SCHEMA = errors.New("duplicate schema")
+
+	// ERR_MISSING_INCLUDE is returned when a schema references another
+	// schema that was not included.
+	ERR_MISSING_INCLUDE = errors.New("missing include")
+
+	// ERR_INVALID_BYTEUNITS is returned when a byte-units string cannot
+	// be parsed.
 	ERR_INVALID_BYTEUNITS = errors.New("invalid byte units")
 
 	byteUnitsRegex = regexp.MustCompile(`^(\d+)(B|KB|MB|GB|TB)?$`)
@@ -115,7 +137,7 @@ func buildDenyNodes(patterns []string) []*Node {
 	return nodes
 }
 
-func ParseSchema(path string, data []byte, loading map[string]bool) (*Schema, error) {
+func parseSchema(path string, data []byte, loading map[string]bool) (*Schema, error) {
 	var raw rawSchema
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -160,6 +182,13 @@ func ParseSchema(path string, data []byte, loading map[string]bool) (*Schema, er
 	return schema, nil
 }
 
+// LoadSchema loads, parses, and resolves a schema from disk.
+//
+// The provided path may omit the ".gro" extension.
+// Included schemas are resolved relative to the schema's directory.
+//
+// LoadSchema caches loaded schemas, detects include cycles, and ensures
+// that schema names are globally unique.
 func LoadSchema(path string) (*Schema, error) {
 	return loadSchema(path, map[string]bool{})
 }
@@ -187,7 +216,7 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	schema := &Schema{Path: path}
 	schemaCache[path] = schema
 
-	parsed, err := ParseSchema(path, data, loading)
+	parsed, err := parseSchema(path, data, loading)
 	if err != nil {
 		delete(schemaCache, path)
 		return nil, err
@@ -204,6 +233,18 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	return schema, err
 }
 
+// ParseByteUnits parses a human-readable byte size string.
+//
+// Valid formats are an unsigned integer followed by an optional unit:
+// B, KB, MB, GB, or TB. Units are case-insensitive.
+//
+// Examples:
+//
+//	"10"     -> 10
+//	"1KB"    -> 1024
+//	"5mb"    -> 5242880
+//
+// An error wrapping ERR_INVALID_BYTEUNITS is returned for invalid input.
 func ParseByteUnits(s string) (uint64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
 	if s == "" {
