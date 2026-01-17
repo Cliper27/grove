@@ -1,14 +1,18 @@
 package schema
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+var ERR_CYCLIC_INCLUDE = errors.New("cyclic include")
+var ERR_DUPLICATE_SCHEMA = errors.New("duplicate schema")
+var ERR_MISSING_INCLUDE = errors.New("missing include")
 
 type rawSchema struct {
 	Include []string   `yaml:"include,omitempty"`
@@ -45,15 +49,6 @@ func parsePattern(pattern string) (string, PatternEngine, NodeType) {
 	return pattern, engine, nodeType
 }
 
-func keys(m map[string]*Schema) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
 func buildNodes(
 	nodes map[string]rawNode,
 	allowed map[string]*Schema,
@@ -72,11 +67,7 @@ func buildNodes(
 			var ok bool
 			schema, ok = allowed[raw.Schema]
 			if !ok {
-				return nil, fmt.Errorf(
-					"schema %q is not included (allowed: %v)",
-					raw.Schema,
-					keys(allowed),
-				)
+				return nil, fmt.Errorf("%w: %q", ERR_MISSING_INCLUDE, raw.Schema)
 			}
 		}
 
@@ -112,7 +103,7 @@ func buildDenyNodes(patterns []string) []*Node {
 	return nodes
 }
 
-func ParseSchema(path string, data []byte) (*Schema, error) {
+func ParseSchema(path string, data []byte, loading map[string]bool) (*Schema, error) {
 	var raw rawSchema
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -124,7 +115,7 @@ func ParseSchema(path string, data []byte) (*Schema, error) {
 	for _, inc := range raw.Include {
 		includePath := filepath.Join(base, inc)
 
-		s, err := LoadSchema(includePath)
+		s, err := loadSchema(includePath, loading)
 		if err != nil {
 			return nil, err
 		}
@@ -158,9 +149,19 @@ func ParseSchema(path string, data []byte) (*Schema, error) {
 }
 
 func LoadSchema(path string) (*Schema, error) {
+	return loadSchema(path, map[string]bool{})
+}
+
+func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	if !strings.HasSuffix(path, ".gro") {
 		path += ".gro"
 	}
+
+	if loading[path] {
+		return nil, fmt.Errorf("%w: %q", ERR_CYCLIC_INCLUDE, path)
+	}
+	loading[path] = true
+	defer func() { loading[path] = false }()
 
 	if s, ok := schemaCache[path]; ok {
 		return s, nil
@@ -174,24 +175,18 @@ func LoadSchema(path string) (*Schema, error) {
 	schema := &Schema{Path: path}
 	schemaCache[path] = schema
 
-	parsed, err := ParseSchema(path, data)
+	parsed, err := ParseSchema(path, data, loading)
 	if err != nil {
 		delete(schemaCache, path)
 		return nil, err
 	}
 
 	if existing, ok := schemaCacheByName[parsed.Name]; ok {
-		return nil, fmt.Errorf(
-			"duplicate schema name %q (%s and %s)",
-			parsed.Name,
-			existing.Path,
-			path,
-		)
+		return nil, fmt.Errorf("%w: %q (%s and %s)", ERR_DUPLICATE_SCHEMA, parsed.Name, existing.Path, path)
 	}
 
 	*schema = *parsed
 	schema.Path = path
-
 	schemaCacheByName[parsed.Name] = schema
 
 	return schema, err
