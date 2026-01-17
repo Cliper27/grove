@@ -105,4 +105,4 @@ deny:
 Bug reports, feature requests, and pull requests are welcome! Please open an issue or submit a PR.
 
 ## License
-MIT License
+[MIT License](https://github.com/Cliper27/grove?tab=MIT-1-ov-file)
