@@ -72,29 +72,33 @@ func main() {
 
 ## Schema Example (`go-project.gro`)
 ```yaml
-name: go-project
-options:
-  maxSize: 1GB
-
 include:
-  - ./cmd.package/go-package.gro
+  - ./go-package.gro
+  - ./go-command.gro
+  - ./go-internal.gro
+
+name: go-project
+maxSize: 1GB
 
 require:
-  cmd:
+  cmd/:
     schema: go-command
-  internal:
+  internal/:
     schema: go-internal
   README.md:
     maxSize: 10MB
+  .gitignore:
+  go.mod:
+  go.sum:
 
 allow:
-  pkg:
+  pkg/:
     schema: go-package
 
 deny:
   - node_modules/
   - "*.exe"
-  - "^temp_[0-9]+.bin$"
+  - "~^temp_[0-9]+.bin$"
 ```
 
 ## Contributing
