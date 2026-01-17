@@ -61,3 +61,42 @@ func TestLoadSchema_HappyPath_WithIncludes(t *testing.T) {
 	assert.Equal(t, PatternGlob, denyPatterns["*.exe"])
 	assert.Equal(t, PatternRegex, denyPatterns["^temp_[0-9]+.bin$"])
 }
+
+func TestLoadSchema_Failure_NonIncludedSchema(t *testing.T) {
+	resetSchemaCaches()
+
+	path := getTestFilePath(filepath.Join("failure", "missing-include.gro"))
+
+	schema, err := LoadSchema(path)
+	assert.Nil(t, schema)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ERR_MISSING_INCLUDE)
+}
+
+func TestLoadSchema_Failure_DuplicateSchema(t *testing.T) {
+	resetSchemaCaches()
+
+	// Load first schema (happy)
+	path1 := getTestFilePath(filepath.Join("happy", "cmd.package", "go-package.gro"))
+	s1, err := LoadSchema(path1)
+	assert.NoError(t, err)
+	assert.NotNil(t, s1)
+
+	// Load second schema with same name
+	path2 := getTestFilePath(filepath.Join("failure", "duplicate-package.gro"))
+	s2, err := LoadSchema(path2)
+	assert.Nil(t, s2)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ERR_DUPLICATE_SCHEMA)
+}
+
+func TestLoadSchema_Failure_IncludeCycle(t *testing.T) {
+	resetSchemaCaches()
+
+	path := getTestFilePath(filepath.Join("failure", "cycle-a.gro"))
+
+	schema, err := LoadSchema(path)
+	assert.Nil(t, schema)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ERR_CYCLIC_INCLUDE)
+}

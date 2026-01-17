@@ -1,0 +1,4 @@
+# cycle-a.gro
+include:
+  - cycle-b.gro
+name: cycle-a
