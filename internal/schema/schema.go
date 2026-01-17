@@ -1,30 +1,43 @@
 package schema
 
-import (
-	"os"
+var schemaCache = map[string]*Schema{}
+var schemaCacheByName = map[string]*Schema{}
 
-	"gopkg.in/yaml.v3"
-)
-
-type Schema struct {
-	Version     string  `yaml:"version"`
-	Description string  `yaml:"description"`
-	Folders     Folders `yaml:"folders"`
-	Files       Files   `yaml:"files"`
+type Options struct {
+	MaxSize string
 }
 
-type Schemas map[string]Schema
+type PatternEngine string
 
-func LoadSchemas(path string) (Schemas, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+const (
+	PatternGlob  PatternEngine = "glob"
+	PatternRegex PatternEngine = "regex"
+)
 
-	var schemas Schemas
-	if err := yaml.Unmarshal(data, &schemas); err != nil {
-		return nil, err
-	}
+type NodeType string
 
-	return schemas, nil
+const (
+	NodeFile   NodeType = "file"
+	NodeFolder NodeType = "folder"
+)
+
+type Node struct {
+	Pattern string
+	Engine  PatternEngine
+	Type    NodeType
+
+	Schema  *Schema
+	Options Options // overrides schema options
+}
+
+// func (n *Node) Search(root string) (string, error)
+
+type Schema struct {
+	Name    string
+	Path    string
+	Options Options
+
+	Require []*Node
+	Allow   []*Node
+	Deny    []*Node
 }

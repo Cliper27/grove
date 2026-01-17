@@ -1,0 +1,27 @@
+include:
+  - ./go-package.gro
+  - ./go-command.gro
+  - ./go-internal.gro
+
+name: go-project
+maxSize: 1GB
+
+require:
+  cmd/:
+    schema: go-command
+  internal/:
+    schema: go-internal
+  README.md:
+    maxSize: 10MB
+  .gitignore:
+  go.mod:
+  go.sum:
+
+allow:
+  pkg/:
+    schema: go-package
+
+deny:
+  - node_modules/
+  - "*.exe"
+  - "~^temp_[0-9]+.bin$"
