@@ -1,2 +1,2 @@
 # grove
-Directory tree schema
+Directory tree schemas
