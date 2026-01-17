@@ -1,6 +1,6 @@
 include:
-  - ./go-package.gro
-  - ./go-command.gro
+  - ./cmd.package\go-package.gro
+  - ./cmd.package/go-command.gro
   - ./go-internal.gro
 
 name: go-project

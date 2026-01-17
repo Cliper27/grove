@@ -39,6 +39,7 @@ func parsePattern(pattern string) (string, PatternEngine, NodeType) {
 	nodeType := NodeFile
 	if strings.HasSuffix(pattern, "/") {
 		nodeType = NodeFolder
+		pattern = strings.TrimSuffix(pattern, "/")
 	}
 
 	return pattern, engine, nodeType
