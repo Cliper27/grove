@@ -1,0 +1,4 @@
+name: missing-include
+require:
+  cmd/:
+    schema: go-command  # Not included in `include`
