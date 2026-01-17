@@ -125,7 +125,7 @@ func ParseSchema(path string, data []byte, loading map[string]bool) (*Schema, er
 
 	base := filepath.Dir(path)
 	for _, inc := range raw.Include {
-		includePath := filepath.Join(base, inc)
+		includePath := filepath.Join(base, filepath.FromSlash(inc))
 
 		s, err := loadSchema(includePath, loading)
 		if err != nil {
