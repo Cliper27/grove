@@ -229,6 +229,7 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	*schema = *parsed
 	schema.Path = path
 	schemaCacheByName[parsed.Name] = schema
+	schema.CompilePatterns()
 
 	return schema, err
 }

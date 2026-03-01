@@ -1,5 +1,10 @@
 package parser
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // Options defines configurable limits and constraints that may apply
 // globally to a schema or locally to a node.
 //
@@ -30,6 +35,9 @@ const (
 
 	// NodeFolder represents a directory node.
 	NodeFolder NodeType = "folder"
+
+	// NodeSymlink represents a symbolic link node.
+	NodeSymlink NodeType = "symlink"
 )
 
 // Node represents a single rule within a schema.
@@ -40,13 +48,16 @@ type Node struct {
 	// Pattern is the raw pattern used to match paths.
 	Pattern string
 
+	// Compiled Regex pattern
+	CompiledPattern *regexp.Regexp
+
 	// Engine determines how the pattern is interpreted (glob or regex).
 	Engine PatternEngine
 
 	// Type indicates whether the node applies to files or folders.
 	Type NodeType
 
-	// Schema is an optional referenced schema applied when this node matches.
+	// Schema is an optional referenced schema.
 	Schema *Schema
 
 	// Options overrides schema-level options for this node.
@@ -75,4 +86,20 @@ type Schema struct {
 
 	// Deny defines nodes that are explicitly disallowed.
 	Deny []*Node
+}
+
+// CompilePatterns precompiles regex patterns for performance
+func (s *Schema) CompilePatterns() error {
+	for _, group := range [][]*Node{s.Require, s.Allow, s.Deny} {
+		for _, n := range group {
+			if n.Engine == PatternRegex {
+				re, err := regexp.Compile(n.Pattern)
+				if err != nil {
+					return fmt.Errorf("invalid regex pattern %q: %w", n.Pattern, err)
+				}
+				n.CompiledPattern = re
+			}
+		}
+	}
+	return nil
 }
