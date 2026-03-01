@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,16 +13,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// schemaCache stores loaded schemas keyed by their file path.
-//
-// It is used to avoid reloading and reparsing the same schema multiple times
-// during a single execution.
-var schemaCache = map[string]*Schema{}
+type Loader struct {
+	// schemaCache stores loaded schemas keyed by their file path.
+	//
+	// It is used to avoid reloading and reparsing the same schema multiple times
+	// during a single execution.
+	schemaCache map[string]*Schema
 
-// schemaCacheByName stores loaded schemas keyed by schema name.
-//
-// It is used to detect duplicate schema names across included schemas.
-var schemaCacheByName = map[string]*Schema{}
+	// schemaCacheByName stores loaded schemas keyed by schema name.
+	//
+	// It is used to detect duplicate schema names across included schemas.
+	schemaCacheByName map[string]*Schema
+}
+
+func NewLoader() *Loader {
+	return &Loader{
+		schemaCache:       make(map[string]*Schema),
+		schemaCacheByName: make(map[string]*Schema),
+	}
+}
 
 var (
 	// ERR_CYCLIC_INCLUDE is returned when schemas include each other
@@ -105,12 +115,16 @@ func buildNodes(nodes map[string]rawNode, allowed map[string]*Schema) ([]*Node, 
 			}
 		}
 
+		maxSize, maxSizeErr := ParseByteUnits(raw.Options.MaxSize)
+		if maxSizeErr != nil {
+			return nil, maxSizeErr
+		}
 		n := &Node{
 			Pattern: p,
 			Engine:  engine,
 			Type:    typ,
 			Options: Options{
-				MaxSize: raw.Options.MaxSize,
+				MaxSize: maxSize,
 			},
 			Schema: schema,
 		}
@@ -137,7 +151,7 @@ func buildDenyNodes(patterns []string) []*Node {
 	return nodes
 }
 
-func parseSchema(path string, data []byte, loading map[string]bool) (*Schema, error) {
+func (l *Loader) parseSchema(path string, data []byte, loading map[string]bool) (*Schema, error) {
 	var raw rawSchema
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -149,7 +163,7 @@ func parseSchema(path string, data []byte, loading map[string]bool) (*Schema, er
 	for _, inc := range raw.Include {
 		includePath := filepath.Join(base, filepath.Clean(inc))
 
-		s, err := loadSchema(includePath, loading)
+		s, err := l.loadSchema(includePath, loading)
 		if err != nil {
 			return nil, err
 		}
@@ -157,10 +171,17 @@ func parseSchema(path string, data []byte, loading map[string]bool) (*Schema, er
 		allowed[s.Name] = s
 	}
 
+	maxSize, maxSizeErr := ParseByteUnits(raw.Options.MaxSize)
+	if maxSizeErr != nil {
+		return nil, maxSizeErr
+	}
+	if raw.Name == "" {
+		return nil, errors.New("schema name required")
+	}
 	schema := &Schema{
 		Name: raw.Name,
 		Options: Options{
-			MaxSize: raw.Options.MaxSize,
+			MaxSize: maxSize,
 		},
 	}
 
@@ -189,11 +210,12 @@ func parseSchema(path string, data []byte, loading map[string]bool) (*Schema, er
 //
 // LoadSchema caches loaded schemas, detects include cycles, and ensures
 // that schema names are globally unique.
-func LoadSchema(path string) (*Schema, error) {
-	return loadSchema(path, map[string]bool{})
+func (l *Loader) LoadSchema(path string) (*Schema, error) {
+	return l.loadSchema(path, map[string]bool{})
 }
 
-func loadSchema(path string, loading map[string]bool) (*Schema, error) {
+func (l *Loader) loadSchema(path string, loading map[string]bool) (*Schema, error) {
+	path = filepath.Clean(path)
 	if !strings.HasSuffix(path, ".gro") {
 		path += ".gro"
 	}
@@ -204,7 +226,7 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	loading[path] = true
 	defer func() { loading[path] = false }()
 
-	if s, ok := schemaCache[path]; ok {
+	if s, ok := l.schemaCache[path]; ok {
 		return s, nil
 	}
 
@@ -214,21 +236,21 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	}
 
 	schema := &Schema{Path: path}
-	schemaCache[path] = schema
+	l.schemaCache[path] = schema
 
-	parsed, err := parseSchema(path, data, loading)
+	parsed, err := l.parseSchema(path, data, loading)
 	if err != nil {
-		delete(schemaCache, path)
+		delete(l.schemaCache, path)
 		return nil, err
 	}
 
-	if existing, ok := schemaCacheByName[parsed.Name]; ok {
+	if existing, ok := l.schemaCacheByName[parsed.Name]; ok {
 		return nil, fmt.Errorf("%w: %q (%s and %s)", ERR_DUPLICATE_SCHEMA, parsed.Name, existing.Path, path)
 	}
 
 	*schema = *parsed
 	schema.Path = path
-	schemaCacheByName[parsed.Name] = schema
+	l.schemaCacheByName[parsed.Name] = schema
 	schema.CompilePatterns()
 
 	return schema, err
@@ -249,7 +271,7 @@ func loadSchema(path string, loading map[string]bool) (*Schema, error) {
 func ParseByteUnits(s string) (uint64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
 	if s == "" {
-		return 0, fmt.Errorf("%w: empty string (expected number + optional unit B/KB/MB/GB/TB)", ERR_INVALID_BYTEUNITS)
+		return 0, nil
 	}
 
 	matches := byteUnitsRegex.FindStringSubmatch(s)
@@ -266,6 +288,9 @@ func ParseByteUnits(s string) (uint64, error) {
 	mult, ok := mults[unit]
 	if !ok {
 		return 0, fmt.Errorf("%w: unknown unit %q", ERR_INVALID_BYTEUNITS, unit)
+	}
+	if value > math.MaxUint64/mult {
+		return 0, fmt.Errorf("%w: overflow", ERR_INVALID_BYTEUNITS)
 	}
 	return value * mult, nil
 }

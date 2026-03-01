@@ -12,7 +12,7 @@ import (
 type Options struct {
 	// MaxSize defines a maximum allowed size using byte units
 	// (e.g. "10MB", "1GB"). An empty value means no limit.
-	MaxSize string
+	MaxSize uint64
 }
 
 // PatternEngine specifies how a node pattern is interpreted.

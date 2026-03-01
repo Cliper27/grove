@@ -67,13 +67,22 @@ func getNextNode(entry fs.DirEntry, schema *parser.Schema) *parser.Node {
 	return findMatchingNode(entry, schema.Allow)
 }
 
-func validateFile(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
-	// TODO: check maxSize
-	return &NodeValidation{
-		Path:  dir,
+func validateFile(entry fs.DirEntry, filePath string, schema *parser.Schema) *NodeValidation {
+	result := &NodeValidation{
+		Path:  filePath,
 		Type:  parser.NodeFile,
 		Valid: true,
 	}
+	if schema != nil && schema.Options.MaxSize > 0 && !entry.IsDir() {
+		ok, err := checkMaxSize(entry, schema.Options.MaxSize)
+		if err != nil || !ok {
+			result.Valid = false
+			result.Reasons = append(result.Reasons,
+				fmt.Sprintf("File exceeds maxSize: %s", filePath),
+			)
+		}
+	}
+	return result
 }
 
 func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
@@ -137,7 +146,6 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 					Valid: true,
 				}
 			} else {
-				// TODO: check maxSize
 				nextSchema := matched.Schema
 				if nextSchema == nil {
 					isDenied := findMatchingNode(entry, schema.Deny) != nil
@@ -152,11 +160,23 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 							fmt.Sprintf("Denied %s found: %q", matched.Type, matched.Pattern),
 						)
 					}
+					if matched.Options.MaxSize > 0 && !entry.IsDir() {
+						ok, err := checkMaxSize(entry, matched.Options.MaxSize)
+						if err != nil {
+							result.Valid = false
+							result.Reasons = append(result.Reasons, err.Error())
+						} else if !ok {
+							result.Valid = false
+							result.Reasons = append(result.Reasons,
+								fmt.Sprintf("File exceeds maxSize (%d bytes)", matched.Options.MaxSize),
+							)
+						}
+					}
 				} else {
 					if entry.IsDir() {
 						result = validateDir(fsys, childPath, nextSchema, sem)
 					} else {
-						result = validateFile(fsys, childPath, nextSchema, sem)
+						result = validateFile(entry, childPath, nextSchema)
 					}
 					result.MatchedNode = matched
 				}
@@ -173,6 +193,19 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 			node.Valid = false
 		}
 		node.Children = append(node.Children, child)
+	}
+
+	if schema.Options.MaxSize > 0 {
+		size, err := dirSize(fsys, dir)
+		if err != nil {
+			node.Valid = false
+			node.Reasons = append(node.Reasons, err.Error())
+		} else if size > schema.Options.MaxSize {
+			node.Valid = false
+			node.Reasons = append(node.Reasons,
+				fmt.Sprintf("Directory exceeds maxSize (%d bytes)", schema.Options.MaxSize),
+			)
+		}
 	}
 
 	return node
