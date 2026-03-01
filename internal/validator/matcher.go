@@ -1,4 +1,4 @@
-package validation
+package validator
 
 import (
 	"fmt"
@@ -7,6 +7,15 @@ import (
 
 	"github.com/Cliper27/grove/internal/parser"
 )
+
+func findMatchingNode(entry fs.DirEntry, nodes []*parser.Node) *parser.Node {
+	for _, n := range nodes {
+		if match(entry, n) {
+			return n
+		}
+	}
+	return nil
+}
 
 func matchesAny(entries []fs.DirEntry, rule *parser.Node) bool {
 	for _, entry := range entries {
@@ -45,13 +54,4 @@ func match(entry fs.DirEntry, rule *parser.Node) bool {
 	default:
 		panic(fmt.Sprintf("unknown pattern engine: %q", rule.Engine))
 	}
-}
-
-func findMatchingNode(entry fs.DirEntry, nodes []*parser.Node) *parser.Node {
-	for _, n := range nodes {
-		if match(entry, n) {
-			return n
-		}
-	}
-	return nil
 }

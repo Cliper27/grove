@@ -1,10 +1,12 @@
-package validation
+package validator
 
 import (
 	"fmt"
 	"io/fs"
 	"os"
 	"path"
+	"runtime"
+	"sync"
 
 	"github.com/Cliper27/grove/internal/parser"
 )
@@ -51,7 +53,8 @@ func Validate(root string, schema *parser.Schema) *NodeValidation {
 }
 
 func ValidateFS(fsys fs.FS, schema *parser.Schema) *NodeValidation {
-	return validateDir(fsys, ".", schema)
+	sem := make(chan struct{}, runtime.NumCPU())
+	return validateDir(fsys, ".", schema, sem)
 }
 
 func getNextNode(entry fs.DirEntry, schema *parser.Schema) *parser.Node {
@@ -64,7 +67,7 @@ func getNextNode(entry fs.DirEntry, schema *parser.Schema) *parser.Node {
 	return findMatchingNode(entry, schema.Allow)
 }
 
-func validateFile(fsys fs.FS, dir string, schema *parser.Schema) *NodeValidation {
+func validateFile(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
 	// TODO: check maxSize
 	return &NodeValidation{
 		Path:  dir,
@@ -73,7 +76,7 @@ func validateFile(fsys fs.FS, dir string, schema *parser.Schema) *NodeValidation
 	}
 }
 
-func validateDir(fsys fs.FS, dir string, schema *parser.Schema) *NodeValidation {
+func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
 	node := &NodeValidation{
 		Path:  dir,
 		Type:  parser.NodeFolder,
@@ -107,44 +110,65 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema) *NodeValidation 
 	checkDenied(filteredEntries, schema.Deny, node)
 	checkRequired(filteredEntries, schema.Require, node)
 
-	for _, entry := range filteredEntries {
-		childPath := path.Join(dir, entry.Name())
+	children := make([]*NodeValidation, len(filteredEntries))
+	var wg sync.WaitGroup
+	for i, entry := range filteredEntries {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int, entry fs.DirEntry) {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		matched := getNextNode(entry, schema)
-		if matched == nil {
-			var nodeType parser.NodeType
-			if entry.IsDir() {
-				nodeType = parser.NodeFolder
+			childPath := path.Join(dir, entry.Name())
+			matched := getNextNode(entry, schema)
+
+			var result *NodeValidation
+
+			if matched == nil {
+				var nodeType parser.NodeType
+				if entry.IsDir() {
+					nodeType = parser.NodeFolder
+				} else {
+					nodeType = parser.NodeFile
+				}
+				result = &NodeValidation{
+					Path:  childPath,
+					Type:  nodeType,
+					Valid: true,
+				}
 			} else {
-				nodeType = parser.NodeFile
+				// TODO: check maxSize
+				nextSchema := matched.Schema
+				if nextSchema == nil {
+					isDenied := findMatchingNode(entry, schema.Deny) != nil
+					result = &NodeValidation{
+						Path:        childPath,
+						Type:        matched.Type,
+						Valid:       !isDenied,
+						MatchedNode: matched,
+					}
+					if isDenied {
+						result.Reasons = append(result.Reasons,
+							fmt.Sprintf("Denied %s found: %q", matched.Type, matched.Pattern),
+						)
+					}
+				} else {
+					if entry.IsDir() {
+						result = validateDir(fsys, childPath, nextSchema, sem)
+					} else {
+						result = validateFile(fsys, childPath, nextSchema, sem)
+					}
+					result.MatchedNode = matched
+				}
 			}
-			node.Children = append(node.Children, &NodeValidation{
-				Path:  childPath,
-				Type:  nodeType,
-				Valid: true,
-			})
-			continue
-		}
 
-		// TODO: check maxSize
-		nextSchema := matched.Schema
-		if nextSchema == nil {
-			node.Children = append(node.Children, &NodeValidation{
-				Path:        childPath,
-				Type:        matched.Type,
-				Valid:       true,
-				MatchedNode: matched,
-			})
-			continue
-		}
+			children[i] = result
+		}(i, entry)
+	}
 
-		var child *NodeValidation
-		if entry.IsDir() {
-			child = validateDir(fsys, childPath, nextSchema)
-		} else {
-			child = validateFile(fsys, childPath, nextSchema)
-		}
-		child.MatchedNode = matched
+	wg.Wait()
+
+	for _, child := range children {
 		if !child.Valid {
 			node.Valid = false
 		}
