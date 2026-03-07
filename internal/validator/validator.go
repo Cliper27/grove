@@ -67,15 +67,6 @@ func getNextNode(entry fs.DirEntry, schema *parser.Schema) *parser.Node {
 	return findMatchingNode(entry, schema.Allow)
 }
 
-func validateFile(entry fs.DirEntry, filePath string, schema *parser.Schema) *NodeValidation {
-	result := &NodeValidation{
-		Path:  filePath,
-		Type:  parser.NodeFile,
-		Valid: true,
-	}
-	return result
-}
-
 func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
 	node := &NodeValidation{
 		Path:  dir,
