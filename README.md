@@ -1,3 +1,8 @@
+![Build](https://github.com/Cliper27/grove/actions/workflows/go-build.yml/badge.svg)
+![Tests](https://github.com/Cliper27/grove/actions/workflows/go-test.yml/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Cliper27/grove)](https://goreportcard.com/report/github.com/Cliper27/grove)
+
+
 # Grove
 
 **Grove** is a cross-platform tool for defining, validating, and building directory trees based on user-defined schemas.  
