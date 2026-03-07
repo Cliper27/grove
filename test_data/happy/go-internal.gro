@@ -1,2 +1,2 @@
 name: go-internal
-maxSize: 100MB
+description: Standard "internal" folder of a Go project
