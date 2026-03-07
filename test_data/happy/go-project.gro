@@ -1,10 +1,11 @@
+version: "1.0"
+name: go-project
+description: Standard Go project structure
+
 include:
   - ./cmd.package/go-package.gro
   - ./cmd.package/go-command.gro
   - ./go-internal.gro
-
-name: go-project
-maxSize: 1GB
 
 require:
   cmd/:
@@ -12,7 +13,7 @@ require:
   internal/:
     schema: go-internal
   README.md:
-    maxSize: 10MB
+    description: Project Documentation
   .gitignore:
   go.mod:
   go.sum:

@@ -1,3 +1,14 @@
+// Package parser implements loading, parsing, and validation of schema files.
+//
+// A schema defines filesystem rules using required, allowed, and denied nodes.
+// Schemas may include other schemas explicitly via the `include` directive and
+// reference them by name.
+//
+// Included schemas form a dependency graph which must be acyclic (a DAG).
+// Cyclic includes and duplicate schema names are rejected at load time.
+//
+// Schema loading is path-based and cached globally within the package.
+// Errors returned by this package are wrapped and may be inspected using errors.Is.
 package parser
 
 import (
@@ -5,21 +16,14 @@ import (
 	"regexp"
 )
 
-// Options defines configurable limits and constraints that may apply
-// globally to a schema or locally to a node.
-//
-// Zero values indicate that no constraint is set.
-type Options struct {
-	// MaxSize defines a maximum allowed size using byte units
-	// (e.g. "10MB", "1GB"). An empty value means no limit.
-	MaxSize uint64
-}
+var RegexPrefix string = "~"
+var FolderSuffix string = "/"
 
 // PatternEngine specifies how a node pattern is interpreted.
 type PatternEngine string
 
 const (
-	// PatternGlob indicates that the pattern uses glob-style matching.
+	// PatternGlob indicates that the pattern uses glob-style matching (default).
 	PatternGlob PatternEngine = "glob"
 
 	// PatternRegex indicates that the pattern uses regular expression matching.
@@ -60,8 +64,8 @@ type Node struct {
 	// Schema is an optional referenced schema.
 	Schema *Schema
 
-	// Options overrides schema-level options for this node.
-	Options Options
+	// Brief optional description. Overrides the Schema description.
+	Description string
 }
 
 // Schema represents a parsed and fully resolved schema definition.
@@ -75,8 +79,8 @@ type Schema struct {
 	// Path is the filesystem path from which the schema was loaded.
 	Path string
 
-	// Options defines default constraints applied to all nodes in the schema.
-	Options Options
+	// Brief optional description for the schema.
+	Description string
 
 	// Require defines nodes that must be present.
 	Require []*Node

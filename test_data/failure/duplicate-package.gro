@@ -1,2 +1,1 @@
 name: go-package  # same as existing schema
-maxSize: 1GB

@@ -3,14 +3,25 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	// ERR_CYCLIC_INCLUDE is returned when schemas include each other
+	// directly or indirectly, forming a cycle.
+	ERR_CYCLIC_INCLUDE = errors.New("cyclic include")
+
+	// ERR_DUPLICATE_SCHEMA is returned when two schemas with the same
+	// name are loaded.
+	ERR_DUPLICATE_SCHEMA = errors.New("duplicate schema")
+
+	// ERR_MISSING_INCLUDE is returned when a schema references another
+	// schema that was not included.
+	ERR_MISSING_INCLUDE = errors.New("missing include")
 )
 
 type Loader struct {
@@ -33,38 +44,10 @@ func NewLoader() *Loader {
 	}
 }
 
-var (
-	// ERR_CYCLIC_INCLUDE is returned when schemas include each other
-	// directly or indirectly, forming a cycle.
-	ERR_CYCLIC_INCLUDE = errors.New("cyclic include")
-
-	// ERR_DUPLICATE_SCHEMA is returned when two schemas with the same
-	// name are loaded.
-	ERR_DUPLICATE_SCHEMA = errors.New("duplicate schema")
-
-	// ERR_MISSING_INCLUDE is returned when a schema references another
-	// schema that was not included.
-	ERR_MISSING_INCLUDE = errors.New("missing include")
-
-	// ERR_INVALID_BYTEUNITS is returned when a byte-units string cannot
-	// be parsed.
-	ERR_INVALID_BYTEUNITS = errors.New("invalid byte units")
-
-	byteUnitsRegex = regexp.MustCompile(`^(\d+)(B|KB|MB|GB|TB)?$`)
-	mults          = map[string]uint64{
-		"":   1,
-		"B":  1,
-		"KB": 1024,
-		"MB": 1024 * 1024,
-		"GB": 1024 * 1024 * 1024,
-		"TB": 1024 * 1024 * 1024 * 1024,
-	}
-)
-
 type rawSchema struct {
-	Include []string   `yaml:"include,omitempty"`
-	Name    string     `yaml:"name"`
-	Options rawOptions `yaml:",inline"`
+	Include     []string `yaml:"include,omitempty"`
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description,omitempty"`
 
 	Require map[string]rawNode `yaml:"require,omitempty"`
 	Allow   map[string]rawNode `yaml:"allow,omitempty"`
@@ -72,25 +55,21 @@ type rawSchema struct {
 }
 
 type rawNode struct {
-	Schema  string     `yaml:"schema,omitempty"`
-	Options rawOptions `yaml:",inline"`
-}
-
-type rawOptions struct {
-	MaxSize string `yaml:"maxSize,omitempty"`
+	Schema      string `yaml:"schema,omitempty"`
+	Description string `yaml:"description,omitempty"`
 }
 
 func parsePattern(pattern string) (string, PatternEngine, NodeType) {
 	engine := PatternGlob
-	if strings.HasPrefix(pattern, "~") {
+	if strings.HasPrefix(pattern, RegexPrefix) {
 		engine = PatternRegex
-		pattern = strings.TrimPrefix(pattern, "~")
+		pattern = strings.TrimPrefix(pattern, RegexPrefix)
 	}
 
 	nodeType := NodeFile
-	if strings.HasSuffix(pattern, "/") {
+	if strings.HasSuffix(pattern, FolderSuffix) {
 		nodeType = NodeFolder
-		pattern = strings.TrimSuffix(pattern, "/")
+		pattern = strings.TrimSuffix(pattern, FolderSuffix)
 	}
 
 	return pattern, engine, nodeType
@@ -115,18 +94,12 @@ func buildNodes(nodes map[string]rawNode, allowed map[string]*Schema) ([]*Node, 
 			}
 		}
 
-		maxSize, maxSizeErr := ParseByteUnits(raw.Options.MaxSize)
-		if maxSizeErr != nil {
-			return nil, maxSizeErr
-		}
 		n := &Node{
-			Pattern: p,
-			Engine:  engine,
-			Type:    typ,
-			Options: Options{
-				MaxSize: maxSize,
-			},
-			Schema: schema,
+			Pattern:     p,
+			Engine:      engine,
+			Type:        typ,
+			Schema:      schema,
+			Description: raw.Description,
 		}
 
 		result = append(result, n)
@@ -157,6 +130,10 @@ func (l *Loader) parseSchema(path string, data []byte, loading map[string]bool) 
 		return nil, err
 	}
 
+	if raw.Name == "" {
+		return nil, errors.New("schema name required")
+	}
+
 	allowed := map[string]*Schema{}
 
 	base := filepath.Dir(path)
@@ -171,18 +148,10 @@ func (l *Loader) parseSchema(path string, data []byte, loading map[string]bool) 
 		allowed[s.Name] = s
 	}
 
-	maxSize, maxSizeErr := ParseByteUnits(raw.Options.MaxSize)
-	if maxSizeErr != nil {
-		return nil, maxSizeErr
-	}
-	if raw.Name == "" {
-		return nil, errors.New("schema name required")
-	}
 	schema := &Schema{
-		Name: raw.Name,
-		Options: Options{
-			MaxSize: maxSize,
-		},
+		Name:        raw.Name,
+		Description: raw.Description,
+		Path:        path,
 	}
 
 	allowed[schema.Name] = schema
@@ -216,9 +185,6 @@ func (l *Loader) LoadSchema(path string) (*Schema, error) {
 
 func (l *Loader) loadSchema(path string, loading map[string]bool) (*Schema, error) {
 	path = filepath.Clean(path)
-	if !strings.HasSuffix(path, ".gro") {
-		path += ".gro"
-	}
 
 	if loading[path] {
 		return nil, fmt.Errorf("%w: %q", ERR_CYCLIC_INCLUDE, path)
@@ -249,48 +215,8 @@ func (l *Loader) loadSchema(path string, loading map[string]bool) (*Schema, erro
 	}
 
 	*schema = *parsed
-	schema.Path = path
 	l.schemaCacheByName[parsed.Name] = schema
 	schema.CompilePatterns()
 
 	return schema, err
-}
-
-// ParseByteUnits parses a human-readable byte size string.
-//
-// Valid formats are an unsigned integer followed by an optional unit:
-// B, KB, MB, GB, or TB. Units are case-insensitive.
-//
-// Examples:
-//
-//	"10"     -> 10
-//	"1KB"    -> 1024
-//	"5mb"    -> 5242880
-//
-// An error wrapping ERR_INVALID_BYTEUNITS is returned for invalid input.
-func ParseByteUnits(s string) (uint64, error) {
-	s = strings.TrimSpace(strings.ToUpper(s))
-	if s == "" {
-		return 0, nil
-	}
-
-	matches := byteUnitsRegex.FindStringSubmatch(s)
-	if matches == nil {
-		return 0, fmt.Errorf("%w: invalid format %q (expected number + optional unit B/KB/MB/GB/TB)", ERR_INVALID_BYTEUNITS, s)
-	}
-
-	value, err := strconv.ParseUint(matches[1], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%w: cannot parse number %q: %v", ERR_INVALID_BYTEUNITS, matches[1], err)
-	}
-
-	unit := matches[2]
-	mult, ok := mults[unit]
-	if !ok {
-		return 0, fmt.Errorf("%w: unknown unit %q", ERR_INVALID_BYTEUNITS, unit)
-	}
-	if value > math.MaxUint64/mult {
-		return 0, fmt.Errorf("%w: overflow", ERR_INVALID_BYTEUNITS)
-	}
-	return value * mult, nil
 }
