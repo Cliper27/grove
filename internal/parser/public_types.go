@@ -12,7 +12,6 @@
 package parser
 
 import (
-	"fmt"
 	"regexp"
 )
 
@@ -68,6 +67,20 @@ type Node struct {
 	Description string
 }
 
+// In this order of priority, returns:
+//   - Node Description
+//   - Schema Description
+//   - Empty string
+func (n *Node) GetDescription() string {
+	if n.Description != "" {
+		return n.Description
+	}
+	if n.Schema != nil {
+		return n.Schema.Description
+	}
+	return ""
+}
+
 // Schema represents a parsed and fully resolved schema definition.
 //
 // Schemas may include other schemas, forming a directed acyclic graph (DAG).
@@ -97,10 +110,7 @@ func (s *Schema) CompilePatterns() error {
 	for _, group := range [][]*Node{s.Require, s.Allow, s.Deny} {
 		for _, n := range group {
 			if n.Engine == PatternRegex {
-				re, err := regexp.Compile(n.Pattern)
-				if err != nil {
-					return fmt.Errorf("invalid regex pattern %q: %w", n.Pattern, err)
-				}
+				re := regexp.MustCompile(n.Pattern)
 				n.CompiledPattern = re
 			}
 		}
