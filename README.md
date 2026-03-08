@@ -90,7 +90,7 @@ grove check ./my-project ./schemas/go-project.gro --format "tree"
 grove check . ./schemas/go-project.gro --format "json" -q -o "result.json"
 ```
 
-## Schema Example (`go-project.go`)
+## Schema Example (`go-project.gro`)
 ```yaml
 name: go-project
 description: Standard Go project structure
@@ -118,5 +118,5 @@ allow:
 deny:
   - node_modules/
   - "*.exe"
-  - "~^temp_[0-9]+.bin$"
+  - "~^temp_[0-9]+.bin$" # ~ indicates regex
 ```
