@@ -59,7 +59,7 @@ _clean-macos dir:
 # Delete folder Linux
 [group("Helpers")]
 _clean-linux dir:
-    @[ -d "{{dir}}" ] && rm -rf "{{dir}}"
+    [ -d "{{dir}}" ] && rm -rf "{{dir}}"
 
 
 # ========
