@@ -1,3 +1,4 @@
+set shell := ["bash", "-c"]
 set windows-shell := ["powershell", "-Command"]
 
 # Project info
