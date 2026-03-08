@@ -24,14 +24,13 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.25'
-
-    - name: Clear Go module cache
-      run: rm -rf ~/go/pkg/mod
+      env:
+        GOPATH: ${{ github.workspace }}/.gopath
 
     - name: Cache Go modules
       uses: actions/cache@v3
       with:
-        path: ~/go/pkg/mod
+        path: ${{ github.workspace }}/.gopath/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
