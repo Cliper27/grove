@@ -16,7 +16,7 @@ jobs:
     - name: Install latest just
       run: | # shell
         curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
-        echo "::add-path::${HOME}/bin"
+        echo "${HOME}/bin" >> $GITHUB_PATH
         just --version
 
     - name: Set up Go
@@ -37,4 +37,5 @@ jobs:
         just build-all
 
     - name: List built binaries
-      run: ls -l build/
+      run: | # shell
+        ls -l build/
