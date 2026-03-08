@@ -13,10 +13,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install just
+      run: | # shell
+        sudo apt install -y just
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.25'
 
     - name: Test
-      run: go test -v ./...
+      run: | # shell
+        just test

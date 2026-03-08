@@ -10,133 +10,158 @@ buildDir := "build"
 default:
     @just --list
 
+# =======
+# HELPERS
+# =======
+# Create folder if it doesn't exist: Windows
+[group("Helpers")]
+_mkdir-windows name:
+    @if (-not (Test-Path -Path {{name}})) { New-Item -ItemType Directory -Path {{name}} | Out-Null }
+
+# Create folder if it doesn't exist: macOS
+[group("Helpers")]
+_mkdir-macos name:
+    @mkdir -p "{{name}}"
+
+# Create folder if it doesn't exist: Linux
+[group("Helpers")]
+_mkdir-linux name:
+    @mkdir -p "{{name}}"
+
+
+# Write-Host
+[group("Helpers")]
+_print-windows string:
+    @Write-Host "{{string}}"
+
+# echo
+[group("Helpers")]
+_print-macos string:
+    @echo "{{string}}"
+
+# echo
+[group("Helpers")]
+_print-linux string:
+    @echo "{{string}}"
+
+
+# Delete folder Windows
+[group("Helpers")]
+_clean-windows dir:
+    @if (Test-Path {{dir}}) { Remove-Item -Recurse -Force {{dir}} }
+
+# Delete folder macOS
+[group("Helpers")]
+_clean-macos dir:
+    @[ -d "{{dir}}" ] && rm -rf "{{dir}}"
+
+# Delete folder Linux
+[group("Helpers")]
+_clean-linux dir:
+    @[ -d "{{dir}}" ] && rm -rf "{{dir}}"
+
+
 # ========
 # CLEANING
 # ========
 
-# Delete `build` folder
+# Delete folder
 [group("Clean")]
-clean-build:
-    @if (Test-Path {{buildDir}}) { Remove-Item -Recurse -Force {{buildDir}} }
-
-# Delete `dist` folder
-[group("Clean")]
-clean-dist:
-    @if (Test-Path {{distDir}}) { Remove-Item -Recurse -Force {{distDir}} }
+clean dir:
+    @just _clean-{{os()}} "{{dir}}"
 
 # Delete `build` and `dist` folders
 [group("Clean")]
-clean: clean-build clean-dist
-    @Write-Host "Clean complete."
+clean-all:
+    @just clean {{buildDir}}
+    @just clean {{distDir}}
+    @just _print-{{os()}} "Clean complete."
 
 
 # ========
 # BUILDING
 # ========
 
-# Create folder if it doesn't exist
+# Build any os and arch from unix
 [group("Build")]
-_mkdir name:
-    @if (-not (Test-Path -Path {{name}})) { New-Item -ItemType Directory -Path {{name}} | Out-Null }
+_build-unix os arch:
+    GOOS={{os}} GOARCH={{arch}} \
+    go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" \
+    -o {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}{{ if os == "windows" { ".exe" } else { "" } }} ./cmd/grove
 
-# Build Windows amd64
+# Build any os and arch from windows
 [group("Build")]
-build-windows-amd64:
-    @Write-Host "Building Windows AMD64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="windows"; $env:GOARCH="amd64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-windows-amd64.exe ./cmd/grove
+_build-windows os arch:
+    $env:GOOS="{{os}}"; $env:GOARCH="{{arch}}"; \
+    go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" \
+    -o {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}{{ if os == "windows" { ".exe" } else { "" } }} ./cmd/grove
 
-# Build Windows arm64
+# Build any OS and architecture
 [group("Build")]
-build-windows-arm64:
-    @Write-Host "Building Windows ARM64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="windows"; $env:GOARCH="arm64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-windows-arm64.exe ./cmd/grove
+build os arch:
+    @just _print-{{os()}} "Building {{os}} {{arch}}..."
+    @just _mkdir-{{os()}} {{buildDir}}
+    @just _build-{{ if os() == "windows" { "windows" } else { "unix" } }} {{os}} {{arch}}
 
-# Build Linux amd64
+# Build any OS and architecture
 [group("Build")]
-build-linux-amd64:
-    @Write-Host "Building Linux AMD64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-linux-amd64 ./cmd/grove
-
-# Build Linux arm64
-[group("Build")]
-build-linux-arm64:
-    @Write-Host "Building Linux ARM64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="linux"; $env:GOARCH="arm64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-linux-arm64 ./cmd/grove
-
-# Build macOS amd64
-[group("Build")]
-build-macos-amd64:
-    @Write-Host "Building macOS AMD64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="darwin"; $env:GOARCH="amd64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-macos-amd64 ./cmd/grove
-
-# Build macOS arm64
-[group("Build")]
-build-macos-arm64:
-    @Write-Host "Building macOS ARM64..."
-    @just _mkdir {{buildDir}}
-    $env:GOOS="darwin"; $env:GOARCH="arm64"; go build -ldflags "-X github.com/Cliper27/grove/internal/version.Version={{version}}" -o {{buildDir}}/{{appName}}-{{version}}-macos-arm64 ./cmd/grove
-
-# Build all platforms
-[group("Build")]
-build-all: clean-build build-windows-amd64 build-windows-arm64 build-linux-amd64 build-linux-arm64 build-macos-amd64 build-macos-arm64
-    @Write-Host "All builds completed."
+build-all:
+    @just clean {{buildDir}}
+    @just build "windows" "amd64"
+    @just build "windows" "arm64"
+    @just build "linux" "amd64"
+    @just build "linux" "arm64"
+    @just build "darwin" "amd64"
+    @just build "darwin" "arm64"
+    @just _print-{{os()}} "Done!"
 
 
 # =========
 # PACKAGING
 # =========
 
-# Generate `.zip` for Windows amd64
+# Generate Windows `.zip` from Windows
 [group("Package")]
-package-windows-amd64:
-    @Write-Host "Packaging Windows binaries..."
-    @just _mkdir {{distDir}}
-    Compress-Archive -Path {{buildDir}}/{{appName}}-{{version}}-windows-amd64.exe -DestinationPath {{distDir}}/{{appName}}-{{version}}-windows-amd64.zip
+_zip_windows_from_windows os arch:
+    @if (Test-Path {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip) { Remove-Item {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip }
+    @Compress-Archive -Path {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe -DestinationPath {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip
 
-# Generate `.zip` for Windows arm64
+# Generate Unix `.tar.gz` from Windows
 [group("Package")]
-package-windows-arm64:
-    @Write-Host "Packaging Windows binaries..."
-    @just _mkdir {{distDir}}
-    Compress-Archive -Path {{buildDir}}/{{appName}}-{{version}}-windows-arm64.exe -DestinationPath {{distDir}}/{{appName}}-{{version}}-windows-arm64.zip
+_zip_unix_from_windows os arch:
+    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}}
 
-# Generate `.tar.gz` for Linux amd64
+# Generate Windows `.zip` from Unix
 [group("Package")]
-package-linux-amd64:
-    @Write-Host "Packaging Linux binaries..."
-    @just _mkdir {{distDir}}
-    tar -czf {{buildDir}}/{{appName}}-{{version}}-linux-amd64.tar.gz -C {{distDir}} {{appName}}-{{version}}-linux-amd64
+_zip_windows_from_unix os arch:
+    @just _mkdir-{{os()}} {{distDir}}
+    @if [ -f {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip ]; then rm {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip; fi
+    @zip -j {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe
 
-# Generate `.tar.gz` for Linux arm64
+# Generate Unix `.tar.gz` from Unix
 [group("Package")]
-package-linux-arm64:
-    @Write-Host "Packaging Linux binaries..."
-    @just _mkdir {{distDir}}
-    tar -czf {{buildDir}}/{{appName}}-{{version}}-linux-arm64.tar.gz -C {{distDir}} {{appName}}-{{version}}-linux-arm64
+_zip_unix_from_unix os arch:
+    @just _mkdir-{{os()}} {{distDir}}
+    @if [ -f {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz ]; then rm {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz; fi
+    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}}
 
-# Generate `.tar.gz` for macOS amd64
+# Generate any compressed archive
 [group("Package")]
-package-macos-amd64:
-    @Write-Host "Packaging macOS binaries..."
-    @just _mkdir {{distDir}}
-    tar -czf {{buildDir}}/{{appName}}-{{version}}-macos-amd64.tar.gz -C {{distDir}} {{appName}}-{{version}}-macos-amd64
-
-# Generate `.tar.gz` for macOS arm64
-[group("Package")]
-package-macos-arm64:
-    @Write-Host "Packaging macOS binaries..."
-    @just _mkdir {{distDir}}
-    tar -czf {{buildDir}}/{{appName}}-{{version}}-macos-arm64.tar.gz -C {{distDir}} {{appName}}-{{version}}-macos-arm64
+package os_family os arch:
+    @just _print-{{os()}} "Packaging {{os}} binaries..."
+    @just _mkdir-{{os()}} {{distDir}}
+    @just _zip_{{os_family}}_from_{{os_family()}} {{os}} {{arch}}
 
 # Generate all compressed archives
 [group("Package")]
-package-all: clean-dist package-windows-amd64 package-windows-arm64 package-linux-amd64 package-linux-arm64 package-macos-amd64 package-macos-arm64
-    @Write-Host "All packages created."
+package-all:
+    @just clean {{distDir}}
+    @just package "windows" "windows" "amd64"
+    @just package "windows" "windows" "arm64"
+    @just package "unix" "linux" "amd64"
+    @just package "unix" "linux" "arm64"
+    @just package "unix" "darwin" "amd64"
+    @just package "unix" "darwin" "arm64"
 
 
 # =======
@@ -146,7 +171,7 @@ package-all: clean-dist package-windows-amd64 package-windows-arm64 package-linu
 # go test
 [group("Test")]
 test:
-    @Write-Host "Running Go tests..."
+    @just _print-{{os()}} "Running Go tests..."
     @go test -v ./...
 
 # Print app version
