@@ -5,7 +5,7 @@
 
 # Grove
 
-**Grove** is a cross-platform tool for defining, validating, and building directory trees based on user-defined schemas.  
+[**Grove**](https://github.com/Cliper27/grove) is a cross-platform tool for defining, validating, and building directory trees based on user-defined schemas.  
 You can use the prebuilt binaries to validate or create directory structures, or integrate Grove into your Go projects.
 
 

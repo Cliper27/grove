@@ -125,26 +125,26 @@ build-all:
 [group("Package")]
 _zip_windows_from_windows os arch:
     @if (Test-Path {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip) { Remove-Item {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip }
-    @Compress-Archive -Path {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe -DestinationPath {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip
+    @Compress-Archive -Path {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe, LICENSE, README.md -DestinationPath {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip
 
 # Generate Unix `.tar.gz` from Windows
 [group("Package")]
 _zip_unix_from_windows os arch:
-    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}}
+    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}} -C {{justfile_directory()}} LICENSE README.md
 
 # Generate Windows `.zip` from Unix
 [group("Package")]
 _zip_windows_from_unix os arch:
     @just _mkdir-{{os()}} {{distDir}}
     @if [ -f {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip ]; then rm {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip; fi
-    @zip -j {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe
+    @zip -j {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.zip {{buildDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.exe LICENSE README.md
 
 # Generate Unix `.tar.gz` from Unix
 [group("Package")]
 _zip_unix_from_unix os arch:
     @just _mkdir-{{os()}} {{distDir}}
     @if [ -f {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz ]; then rm {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz; fi
-    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}}
+    @tar -czf {{distDir}}/{{appName}}-{{version}}-{{os}}-{{arch}}.tar.gz -C {{buildDir}} {{appName}}-{{version}}-{{os}}-{{arch}} -C {{justfile_directory()}} LICENSE README.md
 
 # Generate any compressed archive
 [group("Package")]
