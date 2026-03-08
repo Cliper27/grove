@@ -13,9 +13,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install just
+    - name: Install latest just
       run: | # shell
-        sudo apt install -y just
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
+        echo "::add-path::${HOME}/bin"
+        just --version
 
     - name: Set up Go
       uses: actions/setup-go@v4
