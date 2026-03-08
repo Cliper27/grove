@@ -11,20 +11,7 @@ import (
 	"github.com/Cliper27/grove/internal/parser"
 )
 
-type NodeValidation struct {
-	Path string // relative, slash-separated
-	Type parser.NodeType
-
-	Valid   bool
-	Reasons []string
-
-	// The rule that determined how this node was validated
-	MatchedNode *parser.Node // nil if no rule matched
-
-	Children []*NodeValidation // only for folders
-}
-
-func checkRequired(entries []fs.DirEntry, requiredNodes []*parser.Node, node *NodeValidation) {
+func checkRequired(entries []fs.DirEntry, requiredNodes []*parser.Node, node *ValidatedNode) {
 	for _, require := range requiredNodes {
 		if !matchesAny(entries, require) {
 			node.Valid = false
@@ -36,7 +23,7 @@ func checkRequired(entries []fs.DirEntry, requiredNodes []*parser.Node, node *No
 	}
 }
 
-func checkDenied(entries []fs.DirEntry, deniedNodes []*parser.Node, node *NodeValidation) {
+func checkDenied(entries []fs.DirEntry, deniedNodes []*parser.Node, node *ValidatedNode) {
 	for _, deny := range deniedNodes {
 		if matchesAny(entries, deny) {
 			node.Valid = false
@@ -48,11 +35,11 @@ func checkDenied(entries []fs.DirEntry, deniedNodes []*parser.Node, node *NodeVa
 	}
 }
 
-func Validate(root string, schema *parser.Schema) *NodeValidation {
+func Validate(root string, schema *parser.Schema) *ValidatedNode {
 	return ValidateFS(os.DirFS(root), schema)
 }
 
-func ValidateFS(fsys fs.FS, schema *parser.Schema) *NodeValidation {
+func ValidateFS(fsys fs.FS, schema *parser.Schema) *ValidatedNode {
 	sem := make(chan struct{}, runtime.NumCPU())
 	return validateDir(fsys, ".", schema, sem)
 }
@@ -67,17 +54,8 @@ func getNextNode(entry fs.DirEntry, schema *parser.Schema) *parser.Node {
 	return findMatchingNode(entry, schema.Allow)
 }
 
-func validateFile(entry fs.DirEntry, filePath string, schema *parser.Schema) *NodeValidation {
-	result := &NodeValidation{
-		Path:  filePath,
-		Type:  parser.NodeFile,
-		Valid: true,
-	}
-	return result
-}
-
-func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *NodeValidation {
-	node := &NodeValidation{
+func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{}) *ValidatedNode {
+	node := &ValidatedNode{
 		Path:  dir,
 		Type:  parser.NodeFolder,
 		Valid: true,
@@ -95,7 +73,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 		name := entry.Name()
 		childPath := path.Join(dir, name)
 		if entry.Type()&fs.ModeSymlink != 0 {
-			child := &NodeValidation{
+			child := &ValidatedNode{
 				Path:    childPath,
 				Type:    parser.NodeSymlink,
 				Valid:   true,
@@ -110,7 +88,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 	checkDenied(filteredEntries, schema.Deny, node)
 	checkRequired(filteredEntries, schema.Require, node)
 
-	children := make([]*NodeValidation, len(filteredEntries))
+	children := make([]*ValidatedNode, len(filteredEntries))
 	var wg sync.WaitGroup
 	for i, entry := range filteredEntries {
 		sem <- struct{}{}
@@ -122,7 +100,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 			childPath := path.Join(dir, entry.Name())
 			matched := getNextNode(entry, schema)
 
-			var result *NodeValidation
+			var result *ValidatedNode
 
 			if matched == nil {
 				var nodeType parser.NodeType
@@ -131,7 +109,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 				} else {
 					nodeType = parser.NodeFile
 				}
-				result = &NodeValidation{
+				result = &ValidatedNode{
 					Path:  childPath,
 					Type:  nodeType,
 					Valid: true,
@@ -140,7 +118,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 				nextSchema := matched.Schema
 				if nextSchema == nil {
 					isDenied := findMatchingNode(entry, schema.Deny) != nil
-					result = &NodeValidation{
+					result = &ValidatedNode{
 						Path:        childPath,
 						Type:        matched.Type,
 						Valid:       !isDenied,
@@ -155,7 +133,7 @@ func validateDir(fsys fs.FS, dir string, schema *parser.Schema, sem chan struct{
 					if entry.IsDir() {
 						result = validateDir(fsys, childPath, nextSchema, sem)
 					} else {
-						result = &NodeValidation{
+						result = &ValidatedNode{
 							Path:  childPath,
 							Type:  parser.NodeFile,
 							Valid: true,

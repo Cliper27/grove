@@ -13,10 +13,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install latest just
+      run: | # shell
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
+        export PATH="$PATH:$HOME/bin"
+        echo "${HOME}/bin" >> $GITHUB_PATH
+        just --version
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.25'
 
     - name: Test
-      run: go test -v ./...
+      run: | # shell
+        just test

@@ -5,7 +5,7 @@
 
 # Grove
 
-**Grove** is a cross-platform tool for defining, validating, and building directory trees based on user-defined schemas.  
+[**Grove**](https://github.com/Cliper27/grove) is a cross-platform tool for defining, validating, and building directory trees based on user-defined schemas.  
 You can use the prebuilt binaries to validate or create directory structures, or integrate Grove into your Go projects.
 
 
@@ -32,15 +32,63 @@ go install github.com/cliper27/grove/cmd/grove@latest
 
 ## Usage
 
+### Get help
+```bash
+grove help
+```
+
+Output:
+```bash
+Validate project directory structure using schemas
+
+Usage:
+  grove [command]
+
+Available Commands:
+  check       Validate a directory against a schema
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  version     Print grove version
+
+Flags:
+  -h, --help      help for grove
+  -v, --version   version for grove
+
+Use "grove [command] --help" for more information about a command.
+```
+
+```bash
+grove check --help
+```
+
+Output:
+```bash
+Validate a directory against a schema
+
+Usage:
+  grove check <dir> <schema> [flags]
+
+Flags:
+      --format string   Output format. Options are 'json' or 'tree'
+  -h, --help            help for check
+  -n, --no-color        Suppress cmd colors. Colors are automatically suppressed when not using a terminal that supports them.
+  -o, --output string   Output to specified file
+  -q, --quiet           Suppress stdout
+```
+
+
 ### Validate a directory
 ```bash
-grove check ./my-project ./schemas/go-project.gro
+grove check . go-project.gro
 ```
 
 ```bash
-grove check . ./schemas/go-project.gro
+grove check ./my-project ./schemas/go-project.gro --format "tree"
 ```
 
+```bash
+grove check . ./schemas/go-project.gro --format "json" -q -o "result.json"
+```
 
 ## Schema Example (`go-project.go`)
 ```yaml

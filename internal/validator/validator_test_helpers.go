@@ -59,7 +59,7 @@ func regexFile(pattern string) *parser.Node {
 	}
 }
 
-func findChild(node *NodeValidation, name string) *NodeValidation {
+func findChild(node *ValidatedNode, name string) *ValidatedNode {
 	for _, child := range node.Children {
 		if filepath.Base(child.Path) == name {
 			return child
