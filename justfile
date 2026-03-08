@@ -3,7 +3,7 @@ set windows-shell := ["powershell", "-Command"]
 
 # Project info
 appName := "grove"
-version := "1.1.0"
+version := "0.1.0"
 distDir := "dist"
 buildDir := "build"
 
