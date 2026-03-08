@@ -54,12 +54,12 @@ _clean-windows dir:
 # Delete folder macOS
 [group("Helpers")]
 _clean-macos dir:
-    @[ -d "{{dir}}" ] && rm -rf "{{dir}}"
+    @rm -rf "{{dir}}"
 
 # Delete folder Linux
 [group("Helpers")]
 _clean-linux dir:
-    [ -d "{{dir}}" ] && rm -rf "{{dir}}"
+    @rm -rf "{{dir}}"
 
 
 # ========
