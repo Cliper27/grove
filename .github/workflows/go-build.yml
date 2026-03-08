@@ -22,6 +22,17 @@ jobs:
       with:
         go-version: '1.25'
 
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Build
       run: | # shell
         just build-all
+
+    - name: List built binaries
+      run: ls -l build/
