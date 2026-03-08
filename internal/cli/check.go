@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/Cliper27/grove/internal/parser"
+	"github.com/Cliper27/grove/internal/validator"
 	"github.com/spf13/cobra"
 )
 
@@ -16,10 +18,15 @@ func NewCheckCmd() *cobra.Command {
 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
-			schema := args[1]
+			schemaPath := args[1]
 
-			fmt.Println("Directory:", dir)
-			fmt.Println("Schema:", schema)
+			schema, err := parser.NewLoader().LoadSchema(schemaPath)
+			if err != nil {
+				return err
+			}
+
+			rootNode := validator.Validate(dir, schema)
+			fmt.Println("Is valid:", rootNode.Valid)
 
 			return nil
 		},

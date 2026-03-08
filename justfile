@@ -168,6 +168,12 @@ package-all:
 # TESTING
 # =======
 
+# Print app help
+[group("Test")]
+run-check *args:
+    @go run ./cmd/grove check {{args}}
+
+
 # go test
 [group("Test")]
 test:
