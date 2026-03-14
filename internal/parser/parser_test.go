@@ -66,6 +66,15 @@ func TestLoadSchema_Failure_NonIncludedSchema(t *testing.T) {
 	assert.ErrorIs(t, err, ERR_MISSING_INCLUDE)
 }
 
+func TestLoadSchema_Failure_DuplicatePatter(t *testing.T) {
+	path := getTestFilePath(filepath.Join("failure", "duplicate-pattern.gro"))
+
+	schema, err := NewLoader().LoadSchema(path)
+	assert.Nil(t, schema)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ERR_DUPLICATE_PATTERN)
+}
+
 func TestLoadSchema_Failure_DuplicateSchema(t *testing.T) {
 	loader := NewLoader()
 	// Load first schema (happy)

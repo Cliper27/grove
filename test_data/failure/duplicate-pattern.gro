@@ -1,0 +1,8 @@
+name: duplicate-pattern
+description: Duplicate pattern in different fields
+
+require:
+  cmd/:
+
+deny:
+  - cmd/

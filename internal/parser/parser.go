@@ -22,6 +22,10 @@ var (
 	// ERR_MISSING_INCLUDE is returned when a schema references another
 	// schema that was not included.
 	ERR_MISSING_INCLUDE = errors.New("missing include")
+
+	// ERR_DUPLICATE_PATTERN is returned when the same pattern is specified
+	// more than once amongst `require`, `allow` and `deny`.
+	ERR_DUPLICATE_PATTERN = errors.New("duplicate pattern")
 )
 
 type Loader struct {
@@ -57,6 +61,53 @@ type rawSchema struct {
 type rawNode struct {
 	Schema      string `yaml:"schema,omitempty"`
 	Description string `yaml:"description,omitempty"`
+}
+
+func validatePatterns(raw rawSchema) error {
+	seen := map[string]string{}
+
+	check := func(field string, patterns []string) error {
+		for _, p := range patterns {
+			if prev, ok := seen[p]; ok {
+				return fmt.Errorf(
+					"%w: pattern %q defined in both %q and %q",
+					ERR_DUPLICATE_PATTERN,
+					p,
+					prev,
+					field,
+				)
+			}
+			seen[p] = field
+		}
+		return nil
+	}
+
+	// require
+	req := make([]string, 0, len(raw.Require))
+	for p := range raw.Require {
+		req = append(req, p)
+	}
+
+	if err := check("require", req); err != nil {
+		return err
+	}
+
+	// allow
+	allow := make([]string, 0, len(raw.Allow))
+	for p := range raw.Allow {
+		allow = append(allow, p)
+	}
+
+	if err := check("allow", allow); err != nil {
+		return err
+	}
+
+	// deny
+	if err := check("deny", raw.Deny); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func parsePattern(pattern string) (string, PatternEngine, NodeType) {
@@ -132,6 +183,10 @@ func (l *Loader) parseSchema(path string, data []byte, loading map[string]bool) 
 
 	if raw.Name == "" {
 		return nil, errors.New("schema name required")
+	}
+
+	if err := validatePatterns(raw); err != nil {
+		return nil, err
 	}
 
 	allowed := map[string]*Schema{}
